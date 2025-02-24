@@ -8,6 +8,9 @@ This repository contains notebooks and scripts for analyzing brain imaging data 
 Input Images
      │
      ▼
+Preprocess + Register
+     │
+     ▼
 [Neural Network]
      │
      ├─────→ score-norms (B, 20) ────→ SOM Analysis ────→ Prototype Identification 
@@ -65,20 +68,77 @@ Input Images
 ### Running the Pipeline
 1. Data Preparation
 ```bash
-python prepare_data.py --input_dir /path/to/images --output_dir data/processed
+python run_preprocessing.py TWINS
 ```
 
-2. Score Norm Feature Extraction
+2. Score-Norm Extraction and Heatmap Generation
+
+The inference sript of `sade` can extract score-norms and create heatmaps. The outputs will be saved as numpy files: `<workdir>/experiments/<experiment.id>/<subject-id>.npz`. An example config is given below.
+
+```
+python main.py --mode inference \
+  --config configs/flows/gmm_flow_config.py \
+  --workdir remote_workdir/cuda_opt/learnable/ \
+  --config.eval.checkpoint_num=150 \
+  --config.eval.experiment.flow_checkpoint_path=remote_workdir/cuda_opt/learnable/flow/psz3-globalpsz17-nb20-lr0.0003-bs32-np1024-kimg300_smin1e-2_smax0.8 \
+  --config.eval.experiment.train=abcd-train  \
+  --config.eval.experiment.inlier=abcd-val \
+  --config.eval.experiment.id=default-ckpt-150
+```
+
+> **Note:** These heatmaps are only *rigidly* registered to MNI
+
+Any downstream voxel-wise analysis will need them to be deformably registered to the same space. It is possible to use the `sade_registration.py` script to do so.
 
 3. SOM Analysis
-```python
 
+The `down_syndrome_som` notebook can be run to produce the SOM clustering and the CSV of samples alongside their cluster IDs. This csv is used by the `roi_correlation_analysis` notebook
+
+
+4. Heatmap Plotting
+
+Heatmaps are stored as Numpy files. So they may be loaded and plotted using any preferred tools. An example is available in the `voxel-heatmaps` notebook. However, this requires the images to deformably registered to each other.
+
+
+### Reproducing the ds-analysis
+
+The score-based diffusion model was trained with the following commands. This assumes the script is run from the `sade` folder inside the `sade` repository. All commands were run from inside the docker container produced by `sade/docker`.
+
+```bash
+python main.py --project architecture --mode train \
+--config configs/ve/biggan_config.py
+--workdir /workdir/cuda_opt/learnable \
+--config.data.cache_rate=1.0 \
+--config.model.learnable_embedding \
+--config.training.batch_size=8 \ # switched to 16 at ~1 million iter
+--cuda_opt
 ```
 
-4. Heatmap Generation
-```python
-
+The flow model was run using
+```bash
+python main.py --project flows --mode flow-train \
+--config configs/flows/gmm_flow_config.py \
+--workdir /ASD/ahsan_projects/braintypicality/workdir/cuda_opt/learnable/ \
+--config.data.cache_rate=1 \
+--cuda_opt=0 \
+--config.msma.min_timestep=1e-2 \
+--config.msma.max_timestep=0.8 \
+--config.flow.training_kimg=300
 ```
+The flow model will be created in `<workdir>/flow/psz3-globalpsz17-nb20-lr0.0003-bs32-np1024-kimg300_smin1e-2_smax0.8/`. Then inference was run with 
+
+```bash
+python main.py --mode inference \
+--config configs/flows/gmm_flow_config.py \
+--workdir remote_workdir/cuda_opt/learnable/ \
+--config.eval.checkpoint_num=150 \
+--config.eval.experiment.flow_checkpoint_path=remote_workdir/cuda_opt/learnable/flow/psz3-globalpsz17-nb20-lr0.0003-bs32-np1024-kimg300_smin1e-2_smax0.8 \
+--config.eval.experiment.id=default-ckpt-150 
+--config.eval.experiment.train=abcd-test  \ # can select different cohorts
+--config.eval.experiment.inlier=ibis-inlier \
+--config.eval.experiment.ood=ibis-ds-sa
+```
+
 
 ## Data Formats
 
@@ -99,7 +159,6 @@ python prepare_data.py --input_dir /path/to/images --output_dir data/processed
 
 The pipeline includes visualization tools for:
 - SOM topology and clustering
-- Prototype patterns
 - Heatmap overlays
 - Correlation matrices
 
@@ -107,4 +166,4 @@ See the `notebooks/` directory for interactive visualization examples.
 
 ## References
 
-[Include relevant papers and technical documentation]
+[Include relevant papers?]
