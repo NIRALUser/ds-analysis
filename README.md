@@ -13,12 +13,12 @@ Preprocess + Register
      ▼
 [Neural Network]
      │
-     ├─────→ score-norms (B, 20) ────→ SOM Analysis ────→ Prototype Identification 
+     ├─────⮞ score-norms (B, 20) ────⮞ SOM Analysis ────⮞ Prototype Identification 
      │                                                              │
      │                                                              ▼
-     │                                                      Gather Behavior Scores  ────→ Correlate
+     │                                                      Gather Behavior Scores  ────⮞ Correlate
      │                                                                                       ▲
-     └─────→ score-images (B,20,H,W,D) ────→ Likelihood Model ────→ Heatmaps (1,H,W,D) ──────┘ 
+     └─────⮞ score-images (B,20,H,W,D) ────⮞ Likelihood Model ────⮞ Heatmaps (1,H,W,D) ─────┘ 
 ```
 
 ## Pipeline Components
@@ -112,7 +112,7 @@ python sade_registration.py --mode apply \
 
 #### SOM Analysis
 
-The `down_syndrome_som` notebook can be run to produce the SOM clustering and the CSV of samples alongside their cluster IDs. This csv is used by the `roi_correlation_analysis` notebook
+The `build-som-plots` notebook can be run to produce the SOM clustering and the CSV of samples alongside their cluster IDs. This csv is used by the `roi_correlation_analysis` notebook
 
 #### Heatmap Plotting
 
