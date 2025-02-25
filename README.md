@@ -56,6 +56,7 @@ Preprocess + Register
 - `braintypicality-scripts` repository
     - Contains all necessary code for preparing and processing the data
 - `sade` package available at `https://github.com/ahsanMah/sade`
+  - Please install and run the docker container
 - `simpsom` package avilable at `https://github.com/ahsanMah/simpsom`
     ```bash
     cd /codespace/ && git clone https://github.com/ahsanMah/simpsom
@@ -66,12 +67,13 @@ Preprocess + Register
 
 
 ### Running the Pipeline
-1. Data Preparation
-```bash
-python run_preprocessing.py TWINS
-```
+#### Data Preparation
 
-2. Score-Norm Extraction and Heatmap Generation
+We need to prepare data to be ingested by `sade`. Namely, the images should be two-channels (i.e. 4D images) with T1 and T2 concatenated. Please refer to the `sade` documentation for more details. You may use the `run_preprocessing.py` script to process the data.
+
+To run inference sade will need a file e.g. `ibis-inlier.txt` with filenames of the images, and a directory where this file is present as specified by `--config.data.splits_dir`.
+
+#### Score-Norm Extraction and Heatmap Generation
 
 The inference sript of `sade` can extract score-norms and create heatmaps. The outputs will be saved as numpy files: `<workdir>/experiments/<experiment.id>/<subject-id>.npz`. An example config is given below.
 
@@ -79,26 +81,42 @@ The inference sript of `sade` can extract score-norms and create heatmaps. The o
 python main.py --mode inference \
   --config configs/flows/gmm_flow_config.py \
   --workdir remote_workdir/cuda_opt/learnable/ \
+  --config.data.splits_dir /ASD/ahsan_projects/Developer/braintypicality-scripts/split-keys \
   --config.eval.checkpoint_num=150 \
   --config.eval.experiment.flow_checkpoint_path=remote_workdir/cuda_opt/learnable/flow/psz3-globalpsz17-nb20-lr0.0003-bs32-np1024-kimg300_smin1e-2_smax0.8 \
   --config.eval.experiment.train=abcd-train  \
   --config.eval.experiment.inlier=abcd-val \
-  --config.eval.experiment.id=default-ckpt-150
+  --config.eval.experiment.id=default-ckpt-150 \
+  --config.flow.patch_batch_size=16384 # Increasing this can help speed up inference - keep it powers of 2
 ```
 
-> **Note:** These heatmaps are only *rigidly* registered to MNI
+> [!NOTE]
+> These heatmaps are only *rigidly* registered to MNI. Any downstream voxel-wise analysis will need them to be deformably registered to the same space.
 
-Any downstream voxel-wise analysis will need them to be deformably registered to the same space. It is possible to use the `sade_registration.py` script to do so.
+It is possible to use the `sade_registration.py` script in `braintypicality-scripts` to deformably register to MNI. If you choose to use `sade_registration.py`, here is an example:
 
-3. SOM Analysis
+```bash
+# This will *compute* the registrations for the conte dataset
+# and save them to the transforms directory specified in the code.
+python sade_registration.py --mode compute \
+--config /codespace/sade/sade/configs/ve/biggan_config.py \
+--dataset conte
+
+# This will *apply* the registrations from the transforms directory
+python sade_registration.py --mode apply \
+--config /codespace/sade/sade/configs/ve/biggan_config.py \
+--dataset conte \
+--load_dir /ASD/ahsan_projects/braintypicality/workdir/cuda_opt/learnable/experiments/reprod-correct/conte \
+--save_dir /ASD/ahsan_projects/Developer/ds-analysis/ebds/registered-heatmaps/
+```
+
+#### SOM Analysis
 
 The `down_syndrome_som` notebook can be run to produce the SOM clustering and the CSV of samples alongside their cluster IDs. This csv is used by the `roi_correlation_analysis` notebook
 
+#### Heatmap Plotting
 
-4. Heatmap Plotting
-
-Heatmaps are stored as Numpy files. So they may be loaded and plotted using any preferred tools. An example is available in the `voxel-heatmaps` notebook. However, this requires the images to deformably registered to each other.
-
+Heatmaps are stored as Numpy files. So they may be loaded and plotted using any preferred tools. An example is available in the `voxel-heatmaps` notebook. This will plot the average heatmap across the Down Syndrome samples that belong to the prototype. Recall, that computing the average only makes sense if the images are properly registered to the same space. 
 
 ### Reproducing the ds-analysis
 
@@ -133,10 +151,11 @@ python main.py --mode inference \
 --workdir remote_workdir/cuda_opt/learnable/ \
 --config.eval.checkpoint_num=150 \
 --config.eval.experiment.flow_checkpoint_path=remote_workdir/cuda_opt/learnable/flow/psz3-globalpsz17-nb20-lr0.0003-bs32-np1024-kimg300_smin1e-2_smax0.8 \
---config.eval.experiment.id=default-ckpt-150 
+--config.eval.experiment.id=default-ckpt-150 \
 --config.eval.experiment.train=abcd-test  \ # can select different cohorts
 --config.eval.experiment.inlier=ibis-inlier \
---config.eval.experiment.ood=ibis-ds-sa
+--config.eval.experiment.ood=ibis-ds-sa \
+--config.flow.patch_batch_size=16384
 ```
 
 
