@@ -13,12 +13,12 @@ Preprocess + Register
      ▼
 [Neural Network]
      │
-     ├─────⮞ score-norms (B, 20) ────⮞ SOM Analysis ────⮞ Prototype Identification 
+     ├── ▶︎ score-norms (B, 20) ── ▶︎ SOM Analysis ─── ▶︎ Prototype Identification 
      │                                                              │
      │                                                              ▼
-     │                                                      Gather Behavior Scores  ────⮞ Correlate
-     │                                                                                       ▲
-     └─────⮞ score-images (B,20,H,W,D) ────⮞ Likelihood Model ────⮞ Heatmaps (1,H,W,D) ─────┘ 
+     │                                                      Behavior Scores  ─── ▶︎ Correlate
+     │                                                                                  ▲
+     └── ▶︎ score-images (B,20,H,W,D) ─── ▶︎ Likelihood Model ─── ▶︎ Heatmaps (H,W,D) ─────┘ 
 ```
 
 ## Pipeline Components
@@ -89,11 +89,16 @@ python main.py --mode inference \
   --config.eval.experiment.id=default-ckpt-150 \
   --config.flow.patch_batch_size=16384 # Increasing this can help speed up inference - keep it powers of 2
 ```
+The inference script will output a numpy file with four keys (assuming 20 noise scales for MSMA):
+- `original`: post transformed image that is input for diffusion model
+- `heatmap`: negative likelihood maps (i.e. higher is worse)
+- `scores`: 4D image of size 20xHxWxD containing raw scores (unprocessed output of the diffusion model)
+- `score_norms`: spatial norm of the 4D score image i.e. 20x1
 
 > [!NOTE]
 > These heatmaps are only *rigidly* registered to MNI. Any downstream voxel-wise analysis will need them to be deformably registered to the same space.
 
-It is possible to use the `sade_registration.py` script in `braintypicality-scripts` to deformably register to MNI. If you choose to use `sade_registration.py`, here is an example:
+It is possible to use the `sade_registration.py` script in `braintypicality-scripts` to deformably register to MNI. Here is an example:
 
 ```bash
 # This will *compute* the registrations for the conte dataset
@@ -103,6 +108,7 @@ python sade_registration.py --mode compute \
 --dataset conte
 
 # This will *apply* the registrations from the transforms directory
+# to samples in  `load_dir` and save registered samples to `save_dir`
 python sade_registration.py --mode apply \
 --config /codespace/sade/sade/configs/ve/biggan_config.py \
 --dataset conte \
@@ -120,7 +126,15 @@ Heatmaps are stored as Numpy files. So they may be loaded and plotted using any 
 
 ### Reproducing the ds-analysis
 
-The score-based diffusion model was trained with the following commands. This assumes the script is run from the `sade` folder inside the `sade` repository. All commands were run from inside the docker container produced by `sade/docker`.
+The score-based diffusion model was trained with the following commands. This assumes the script is run from the `sade` folder inside the `sade` repository. All commands were run from inside the docker container produced by `sade/docker`. Some important directories:
+
+- workdir: `/ASD/ahsan_projects/braintypicality/workdir/cuda_opt/learnable/`
+  - Parent directory directory where all checkpoints, logs and experiments are saved
+- <workdir>/checkpoints: PyTorch checkpoints with state dict of ema weights, optimizer states etc.
+- <workdir>/experiments: Directory where inference results are stored for multiple cohorts
+- <workdir>/flow/psz3-globalpsz17-nb20-lr0.0003-bs32-np1024-kimg300_smin1e-2_smax0.8
+  - This is the best performing flow model (lowest validation loss on abcd-val)
+  - Used to generate the voxel-wise heatmaps
 
 ```bash
 python main.py --project architecture --mode train \
@@ -162,7 +176,7 @@ python main.py --mode inference \
 ## Data Formats
 
 ### Inputs
-- Raw Images: NIfTI format (.nii.gz)
+- Raw Images: NIfTI format (.nii.gz) with 2 channels for T1 + T2
 - Behavioral Scores: CSV files with subject IDs and metrics
 
 ### Intermediate Data
@@ -181,8 +195,15 @@ The pipeline includes visualization tools for:
 - Heatmap overlays
 - Correlation matrices
 
-See the `notebooks/` directory for interactive visualization examples.
-
 ## References
 
-[Include relevant papers?]
+```
+@inproceedings{
+  mahmood2021multiscale,
+  title={Multiscale Score Matching for Out-of-Distribution Detection},
+  author={Ahsan Mahmood and Junier Oliva and Martin Andreas Styner},
+  booktitle={International Conference on Learning Representations},
+  year={2021},
+  url={https://openreview.net/forum?id=xoHdgbQJohv}
+}
+```
